@@ -20,10 +20,34 @@ namespace BTLHelper
         List<string[]> QuestionsAddedList = new List<string[]>();
         GSTwitchClient twitch;
         GSTwitterClient twitter;
+        DataTable dataTable1, dataTable2;
+        BindingSource source1, source2;
+
         public Form1()
         {
             InitializeComponent();
             xsHandler = new xSplitHandler2();
+            dataTable1 = new DataTable();
+            dataTable2 = new DataTable();
+
+            dataTable1.RowChanged += dataTable1_RowChanged;
+
+            source1 = new BindingSource();
+            source1.DataSource = dataTable1;
+            source2 = new BindingSource();
+            source2.DataSource = dataTable2;
+
+            dataTable1.Columns.Add("Question",typeof(string));            
+            dataTable1.Columns.Add("Author", typeof(string));
+            dataTable2.Columns.Add("Question", typeof(string));
+            dataTable2.Columns.Add("Author", typeof(string));
+
+            dataGridView1.DataSource = source1;
+            dataGridView1.Columns[0].Width = 320;
+            dataGridView1.Columns[1].Width = 80;
+            dataGridView2.DataSource = source2;
+            dataGridView2.Columns[0].Width = 320;
+            dataGridView2.Columns[1].Width = 80;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -87,7 +111,8 @@ namespace BTLHelper
                 {
                     string row = fileReader.ReadLine();
                     string[] question = row.Split('\t');
-                    dataGridView1.Rows.Add(question);
+                    dataTable1.Rows.Add(question);
+                    Console.WriteLine(dataTable1.Rows[0].ItemArray[0]);
                     QuestionsAddedList.Add(question);
                 }
                 fileReader.Dispose();
@@ -180,36 +205,44 @@ namespace BTLHelper
         {
             if (Properties.Settings.Default.ManualQuestion != "")
             {
-                dataGridView1.Rows.Add(new string[] { Properties.Settings.Default.ManualQuestion, Properties.Settings.Default.ManualAuthor});               
+                DataRow row = dataTable1.NewRow();
+                row["question"] = Properties.Settings.Default.ManualQuestion;
+                row["author"] = Properties.Settings.Default.ManualAuthor;
+                dataTable1.Rows.Add(row);               
             }
         }
 
         private void publishQuestion()
         {
-            Properties.Settings.Default.PublishedQuestion = dataGridView1[0,dataGridView1.CurrentRow.Index].Value.ToString();
-            Properties.Settings.Default.PublishedAuthor = dataGridView1[1, dataGridView1.CurrentRow.Index].Value.ToString();
+            try
+            {
+                Properties.Settings.Default.PublishedQuestion = dataGridView2[0, dataGridView2.CurrentRow.Index].Value.ToString();
+                Properties.Settings.Default.PublishedAuthor = dataGridView2[1, dataGridView2.CurrentRow.Index].Value.ToString();
 
 
-            Properties.Settings.Default.Save();
+                Properties.Settings.Default.Save();
 
-            xsHandler.loadTagsFromXML();
+                xsHandler.loadTagsFromXML();
 
-            xsHandler.changeXMLTag("question", Properties.Settings.Default.PublishedQuestion, true);
-            if (Properties.Settings.Default.PublishedAuthor == "")
-                xsHandler.changeXMLTag("author", Properties.Settings.Default.PublishedAuthor, true);            
-            else
-                xsHandler.changeXMLTag("author", "-" + Properties.Settings.Default.PublishedAuthor, true);
+                xsHandler.changeXMLTag("question", Properties.Settings.Default.PublishedQuestion, true);
+                if (Properties.Settings.Default.PublishedAuthor == "")
+                    xsHandler.changeXMLTag("author", Properties.Settings.Default.PublishedAuthor, true);
+                else
+                    xsHandler.changeXMLTag("author", "-" + Properties.Settings.Default.PublishedAuthor, true);
 
-            xsHandler.writeXMLFile();
+                xsHandler.writeXMLFile();
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("No question selected!");
+            }
 
         }
 
         private void dataGridView1_MouseClick(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
-            {
-                
-                
+            {               
                 int currentMouseOverRow = dataGridView1.HitTest(e.X, e.Y).RowIndex;
 
                 if (currentMouseOverRow >= 0)
@@ -218,35 +251,44 @@ namespace BTLHelper
                     dataGridView1.Rows[currentMouseOverRow].Selected = true;
 
                     ContextMenu m = new ContextMenu();
-                    MenuItem menuDeleteQuestion = new MenuItem("Delete Question");
-                    MenuItem menuPublishQuestion = new MenuItem("Publish Question");
-                    menuDeleteQuestion.Click += new EventHandler(menuDeleteQuestion_Click);
-                    menuPublishQuestion.Click += new EventHandler(masterPublishButton_Click);
+                    MenuItem menuQueueQuestion = new MenuItem("Add To Queue");
+                    MenuItem menuDeleteQuestion = new MenuItem("Delete");
 
-                    m.MenuItems.Add(menuPublishQuestion);
+                    menuQueueQuestion.Click += new EventHandler(menuQueueQuestion_Click);
+                    menuDeleteQuestion.Click += new EventHandler(menuDeleteQuestion_Click);
+
+                    m.MenuItems.Add(menuQueueQuestion);
                     m.MenuItems.Add(menuDeleteQuestion);
                     m.Show(dataGridView1, new Point(e.X, e.Y));
                 }
             }
         }
 
+        private void menuQueueQuestion_Click (object sender, EventArgs e)
+        {
+            MenuItem clickedItem = sender as MenuItem;
+            DataRow qRow = (DataRow) dataTable1.Rows[dataGridView1.Rows.GetFirstRow(DataGridViewElementStates.Selected)];
+            dataTable2.ImportRow(qRow);
+            dataGridView1.ClearSelection();
+        }
+
         private void menuDeleteQuestion_Click(object sender, EventArgs e)
         {
             MenuItem clickedItem = sender as MenuItem;
-            dataGridView1.Rows.RemoveAt(dataGridView1.Rows.GetFirstRow(DataGridViewElementStates.Selected));
+            dataTable1.Rows.RemoveAt(dataGridView1.Rows.GetFirstRow(DataGridViewElementStates.Selected));
             dataGridView1.ClearSelection();
 
         }
 
-        private void dataGridView1_RowsAdded(object sender, DataGridViewRowsAddedEventArgs e)
+        private void dataTable1_RowChanged(object sender, DataRowChangeEventArgs e)
         {
             if (!Properties.Settings.Default.ImportingQuestions)
             {
                 StringBuilder sb = new StringBuilder();
                 //sb.AppendLine("Question, Author");
-                foreach (DataGridViewRow row in dataGridView1.Rows)
+                foreach (DataRow row in dataTable1.Rows)
                 {
-                    sb.AppendLine(row.Cells["questions"].Value.ToString() + '\t' + row.Cells["authors"].Value.ToString());
+                    sb.AppendLine(row.ItemArray[0].ToString() + '\t' + row.ItemArray[0].ToString());
                 }
 
                 string backupFile = Path.Combine(Properties.Settings.Default.BTLFolderLocation, "Documents", "BTLQuestionsBackup.txt");
@@ -310,7 +352,10 @@ namespace BTLHelper
             {
                 foreach (string[] array in twitch.QuestionsList)
                 {
-                    dataGridView1.Rows.Add(array);
+                    DataRow row = dataTable1.NewRow();
+                    row["question"] = array[0];
+                    row["author"] = array[1];
+                    dataTable1.Rows.Add(row);
                 }
                 twitch.QuestionsList.Clear();
             }
@@ -331,7 +376,10 @@ namespace BTLHelper
 
                 foreach (string[] q in questionsNotAdded)
                 {
-                    dataGridView1.Rows.Add(q);
+                    DataRow row = dataTable1.NewRow();
+                    row["question"] = q[0];
+                    row["author"] = q[1];
+                    dataTable1.Rows.Add(q);
                 }
 
                 QuestionsAddedList = twitter.QuestionsList;
@@ -372,7 +420,7 @@ namespace BTLHelper
             DialogResult result = MessageBox.Show("This cannot be undone.", "Are you sure?", MessageBoxButtons.YesNo);
             if (result == DialogResult.Yes)
             {
-                dataGridView1.Rows.Clear();
+                dataTable1.Rows.Clear();
                 QuestionsAddedList.Clear();
             }
         }
@@ -390,6 +438,54 @@ namespace BTLHelper
                 xsHandler.changeXMLTag("author", "-" + Properties.Settings.Default.PublishedAuthor, true);
 
             xsHandler.writeXMLFile();
+        }
+
+        private void dataGridView2_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                int currentMouseOverRow = dataGridView2.HitTest(e.X, e.Y).RowIndex;
+
+                if (currentMouseOverRow >= 0)
+                {
+                    dataGridView2.ClearSelection();
+                    dataGridView2.Rows[currentMouseOverRow].Selected = true;
+
+                    ContextMenu m = new ContextMenu();
+                    MenuItem menuPublishQuestion = new MenuItem("Publish");
+                    MenuItem menuMoveToTop = new MenuItem("Move To Top");
+                    MenuItem menuDeleteQuestion = new MenuItem("Delete");
+
+                    menuMoveToTop.Click += new EventHandler(menuQueueMoveToTop_Click);
+                    menuDeleteQuestion.Click += new EventHandler(menuQueueDeleteQuestion_Click);
+                    menuPublishQuestion.Click += new EventHandler(masterPublishButton_Click);
+
+                    m.MenuItems.Add(menuPublishQuestion);
+                    m.MenuItems.Add(menuMoveToTop);
+                    m.MenuItems.Add(menuDeleteQuestion);
+                    m.Show(dataGridView2, new Point(e.X, e.Y));
+                }
+            }
+        }
+
+        private void menuQueueDeleteQuestion_Click(object sender, EventArgs e)
+        {
+            MenuItem clickedItem = sender as MenuItem;
+            dataTable2.Rows.RemoveAt(dataGridView2.Rows.GetFirstRow(DataGridViewElementStates.Selected));
+            dataGridView2.ClearSelection();
+
+        }
+
+        private void menuQueueMoveToTop_Click(object sender, EventArgs e)
+        {
+            MenuItem clickedItem = sender as MenuItem;
+            int index = dataGridView2.Rows.GetFirstRow(DataGridViewElementStates.Selected);
+            DataRow qRow = dataTable2.Rows[index];
+            DataRow newRow = dataTable2.NewRow();
+            newRow.ItemArray = qRow.ItemArray;
+            dataTable2.Rows.RemoveAt(index);
+            dataTable2.Rows.InsertAt(newRow, 0);
+            dataGridView2.ClearSelection();
         }
     }        
 }
