@@ -112,7 +112,7 @@ namespace BTLHelper
                     string row = fileReader.ReadLine();
                     string[] question = row.Split('\t');
                     dataTable1.Rows.Add(question);
-                    Console.WriteLine(dataTable1.Rows[0].ItemArray[0]);
+                    //Console.WriteLine(dataTable1.Rows[0].ItemArray[0]);
                     QuestionsAddedList.Add(question);
                 }
                 fileReader.Dispose();
@@ -216,11 +216,9 @@ namespace BTLHelper
         {
             try
             {
-                Properties.Settings.Default.PublishedQuestion = dataGridView2[0, dataGridView2.CurrentRow.Index].Value.ToString();
-                Properties.Settings.Default.PublishedAuthor = dataGridView2[1, dataGridView2.CurrentRow.Index].Value.ToString();
-
-
-                Properties.Settings.Default.Save();
+                
+                Console.WriteLine(Properties.Settings.Default.PublishedQuestion);
+                Console.WriteLine(Properties.Settings.Default.PublishedAuthor);
 
                 xsHandler.loadTagsFromXML();
 
@@ -288,7 +286,7 @@ namespace BTLHelper
                 //sb.AppendLine("Question, Author");
                 foreach (DataRow row in dataTable1.Rows)
                 {
-                    sb.AppendLine(row.ItemArray[0].ToString() + '\t' + row.ItemArray[0].ToString());
+                    sb.AppendLine(row.ItemArray[0].ToString() + '\t' + row.ItemArray[1].ToString());
                 }
 
                 string backupFile = Path.Combine(Properties.Settings.Default.BTLFolderLocation, "Documents", "BTLQuestionsBackup.txt");
@@ -432,16 +430,13 @@ namespace BTLHelper
             Properties.Settings.Default.Save();
 
             xsHandler.changeXMLTag("question", Properties.Settings.Default.PublishedQuestion, true);
-            if (Properties.Settings.Default.PublishedAuthor == "")
-                xsHandler.changeXMLTag("author", Properties.Settings.Default.PublishedAuthor, true);
-            else
-                xsHandler.changeXMLTag("author", "-" + Properties.Settings.Default.PublishedAuthor, true);
+            xsHandler.changeXMLTag("author", Properties.Settings.Default.PublishedAuthor, true);
 
             xsHandler.writeXMLFile();
         }
 
         private void dataGridView2_MouseDown(object sender, MouseEventArgs e)
-        {
+        {           
             if (e.Button == MouseButtons.Right)
             {
                 int currentMouseOverRow = dataGridView2.HitTest(e.X, e.Y).RowIndex;
@@ -455,17 +450,39 @@ namespace BTLHelper
                     MenuItem menuPublishQuestion = new MenuItem("Publish");
                     MenuItem menuMoveToTop = new MenuItem("Move To Top");
                     MenuItem menuDeleteQuestion = new MenuItem("Delete");
+                    MenuItem menuCopyNextQuestionPrompt = new MenuItem("Copy Next Question Prompt");
 
                     menuMoveToTop.Click += new EventHandler(menuQueueMoveToTop_Click);
                     menuDeleteQuestion.Click += new EventHandler(menuQueueDeleteQuestion_Click);
-                    menuPublishQuestion.Click += new EventHandler(masterPublishButton_Click);
+                    menuPublishQuestion.Click += new EventHandler(menuPublishQuestion_Click);
+                    menuCopyNextQuestionPrompt.Click += new EventHandler(menuCopyNextQuestionPrompt_Click);
 
                     m.MenuItems.Add(menuPublishQuestion);
                     m.MenuItems.Add(menuMoveToTop);
                     m.MenuItems.Add(menuDeleteQuestion);
+                    m.MenuItems.Add(menuCopyNextQuestionPrompt);
                     m.Show(dataGridView2, new Point(e.X, e.Y));
                 }
             }
+        }
+
+        private void menuCopyNextQuestionPrompt_Click(object sender, EventArgs e)
+        {
+            DataRow qRow = (DataRow)dataTable2.Rows[dataGridView2.Rows.GetFirstRow(DataGridViewElementStates.Selected)];
+
+            string nextQuestion = qRow[0].ToString();
+            Clipboard.SetText("Next Question: \"" + nextQuestion + "\"");
+        }
+
+        private void menuPublishQuestion_Click(object sender, EventArgs e)
+        {
+            DataRow qRow = (DataRow)dataTable2.Rows[dataGridView2.Rows.GetFirstRow(DataGridViewElementStates.Selected)];
+            Properties.Settings.Default.PublishedQuestion = qRow[0].ToString();
+            Properties.Settings.Default.PublishedAuthor = qRow[1].ToString();
+
+            Properties.Settings.Default.Save();
+
+            publishQuestion();
         }
 
         private void menuQueueDeleteQuestion_Click(object sender, EventArgs e)
